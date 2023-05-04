@@ -1,6 +1,3 @@
-# DATA 601 - Final Project
-# Gabriel Dutra and Ezra Sutter
-
 library(MASS)
 library(smallstuff)
 library(boot)
@@ -13,12 +10,10 @@ library(gam)
 
 setwd('C:/Users/gabri/OneDrive/Área de Trabalho/CS_Projects/DATA601/Code')
 
-# The following code in based on the 9 steps mentioned in the final project 
-# instructions file
 
 #-------------------------------------------------------------------------------
 #-------------------------------------------------------------------------------
-# 1)
+# 1) Data Setup
 
 data = fread('../data/HTRU_2.csv')
 setDT(data)
@@ -57,7 +52,7 @@ summary(PulsarTrain$target_class)  # 1305/13013
 #-------------------------------------------------------------------------------
 #-------------------------------------------------------------------------------
 
-# 3)
+# 3) Information about the dataset
 
 # Data Source:
 # https://archive.ics.uci.edu/ml/datasets/HTRU2#
@@ -245,7 +240,6 @@ yhat=rep(levels(PulsarTest$target_class)[1],nrow(PulsarTest))
 yhat[pred>.5]=levels(PulsarTest$target_class)[2]
 mean(PulsarTest$target_class!=yhat) 
 # Test error 2.514%
-
 
 #-------------------------------------------------------------------------------
 
