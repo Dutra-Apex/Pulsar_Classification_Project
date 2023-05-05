@@ -7,13 +7,15 @@ library(broom)
 library(glmnet)
 library(data.table)
 library(gam)
+library(ggplot2)
+#library(tidyr)
 
-setwd('C:/Users/gabri/OneDrive/Área de Trabalho/CS_Projects/DATA601/Code')
-
+# The following code in based on the 9 steps mentioned in the final project 
+# instructions file
 
 #-------------------------------------------------------------------------------
 #-------------------------------------------------------------------------------
-# 1) Data Setup
+# 1)
 
 data = fread('../data/HTRU_2.csv')
 setDT(data)
@@ -52,7 +54,7 @@ summary(PulsarTrain$target_class)  # 1305/13013
 #-------------------------------------------------------------------------------
 #-------------------------------------------------------------------------------
 
-# 3) Information about the dataset
+# 3)
 
 # Data Source:
 # https://archive.ics.uci.edu/ml/datasets/HTRU2#
@@ -67,6 +69,7 @@ summary(PulsarTrain$target_class)  # 1305/13013
 
 # 4) Creating all models and evaluating their performance
 
+error_rates = c(rep(0, 7))
 
 # LDA model - All predictors
 ldamod=lda(target_class~., PulsarTrain)
@@ -79,6 +82,8 @@ set.seed(42069);CVerror(ldamod,10)                #10-fold CV error rate=2.493
 predl_test=predict(ldamod, PulsarTest)
 mean(predl_test$class!=PulsarTest$target_class)
 # Test set: 2.63% error rate
+
+error_rates[1] = mean(predl_test$class!=PulsarTest$target_class)
 
 #-------------------------------------------------------------------------------
 
@@ -93,6 +98,8 @@ set.seed(42069);CVerror(qdamod,10)                #10-fold CV error rate=3.248
 predq_test=predict(qdamod, PulsarTest)
 mean(predq_test$class!=PulsarTest$target_class)
 # Test set: 3.29% error rate
+
+error_rates[2] = mean(predq_test$class!=PulsarTest$target_class)
 
 #-------------------------------------------------------------------------------
 
@@ -127,6 +134,8 @@ set.seed(42069);CVerror(gmod2,10)                #10-fold CV error rate=2.032
 logistErrorRate(gmod2, PulsarTest)
 # 2.291% Testing error rate
 # Removing this predictor did not impact our testing error rate
+
+error_rates[3] = logistErrorRate(gmod2, PulsarTest)$errorRate/100
 
 #-------------------------------------------------------------------------------
 
@@ -170,6 +179,8 @@ mean(PulsarTest$target_class!=yhat)
 
 # Error Rate: 2.291%
 
+error_rates[4] = mean(PulsarTest$target_class!=yhat) 
+
 #-------------------------------------------------------------------------------
 
 # Lasso Regression
@@ -183,6 +194,8 @@ yhat=rep(levels(PulsarTest$target_class)[1],nrow(PulsarTest))
 yhat[pred[,1]>.5]=levels(PulsarTest$target_class)[2]
 mean(PulsarTest$target_class!=yhat) 
 # Error Rate: 2.291%
+
+error_rates[5] = mean(PulsarTest$target_class!=yhat) 
 
 #-------------------------------------------------------------------------------
 
@@ -203,7 +216,7 @@ par(mfrow=c(2,2))
 plot(knntrain~Ks,type='b',main="Training",xlab="K",ylab="% Error Rate")
 plot(knn5err~Ks,type='b',main="5-CV",xlab="K",ylab="% Error Rate")
 plot(knn10err~Ks,type='b',main="10-CV",xlab="K",ylab="% Error Rate")
-
+par(mfrow=c(1,1))
 
 Ks[c(which.min(knntrain),which.min(knn5err),which.min(knn10err))]
 round2(c(min(knntrain),min(knn5err),min(knn10err)),2)
@@ -215,6 +228,8 @@ yhat1=knn(PulsarTrain[,1:8],PulsarTest[,1:8],PulsarTrain$target_class,11,prob=T)
 mean(yhat1!=PulsarTest$target_class) 
 
 # Testing error rate: 2.598%
+
+error_rates[6] = mean(yhat1!=PulsarTest$target_class) 
 
 #-------------------------------------------------------------------------------
 
@@ -228,6 +243,13 @@ yhat[pred>.5]=levels(PulsarTest$target_class)[2]
 mean(PulsarTest$target_class!=yhat) 
 # Test error 2.430%
 
+error_rates[7] = mean(PulsarTest$target_class!=yhat)
+
+
+# GAMs - Removing all of the insignificant predictors
+# We removed each predictor 1 by 1 according to their significance, the resulting
+# model has all predictors significant
+
 gamod=gam(target_class~., data=PulsarTrain[,-c('Skewness of the DM-SNR curve',
                                                'Mean of the DM-SNR curve',
                                                'Standard deviation of the integrated profile',
@@ -240,6 +262,7 @@ yhat=rep(levels(PulsarTest$target_class)[1],nrow(PulsarTest))
 yhat[pred>.5]=levels(PulsarTest$target_class)[2]
 mean(PulsarTest$target_class!=yhat) 
 # Test error 2.514%
+
 
 #-------------------------------------------------------------------------------
 
@@ -264,7 +287,9 @@ table(PulsarTest$target_class)
 # -Logistic Regression (Full and Reduced 1 Models) had the best performance (lowest test ER)
 # -Our Lasso and Ridge Regression models had a best lambda of 0, therefore defaulting to logistic regression
 # -The GAM model was our second best model, followed by LDA
-# -It is important to note that our reduced GAM model, which used only 
+# -It is important to note that our reduced GAM model, which used only 3 predictors 
+# (mean of the integrated profile, excess kurtosis of IP, skeweness of IP), was still able to
+# obtain significant high performance
 
 #-------------------------------------------------------------------------------
 #-------------------------------------------------------------------------------
@@ -274,21 +299,44 @@ table(PulsarTest$target_class)
 # We chose the logistic regression to be our model due to its lower testing error
 # rate (2.291%). We will now perform a deeper analysis on its results
 
-logistErrorRate(gmod2)
-ler=logistErrorRate(gmod2)
+logistErrorRate(gmod2, PulsarTest)
+ler=logistErrorRate(gmod2, PulsarTest)
 lr=ler$result
 
+lr[2,2]/lr[3,2]   #Sensitivity=.820
+# This means that we correctly identified 82.0% of pulsar on the testing set
 
-lr[2,2]/lr[3,2]   #Sensitivity=.831
-# This means that we correctly identified 83.1% of pulsar on the testing set
+lr[1,1]/lr[3,1]   #Specificity=.993
+# This means that we correctly identified 99.3% of all non Pulsar objects on the testing
 
-lr[1,1]/lr[3,1]   #Specificity=.995
-# This means that we correctly identified 99.5% of all non Pulsar objects on the testing
+lr[2,1]/lr[3,1]   #False positive rate=.007
+lr[1,2]/lr[3,2]   #False negative rate=.179
+lr[2,2]/lr[2,3]   #Precision=.926
 
-lr[2,1]/lr[3,1]   #False positive rate=.005
-lr[1,2]/lr[3,2]   #False negative rate=.169
-lr[2,2]/lr[2,3]   #Precision=.944
+# Intrepretation of the coefficients
+
+summary(gmod2)$coefficients
+
+# The three coefficients with highest magnitude are:
+# Excess kurtosis of the integrated profile (6.76), 
+# Skewness of the integrated profile (-0.64)
+# Mean of the DM-SNR curve (-0.0325)
+
 
 #-------------------------------------------------------------------------------
 
+# Make plot to visualize performance of all models
+
+models = c("LDA", "QDA", "Logistic", "Ridge", "Lasso", "KNN - k=11", "GAM")
+error_rates = 100*error_rates
+
+df = data.frame(models, error_rates)
+df$models = reorder(df$models, df$error_rates)
+
+ggplot(df, aes(x = models, y = error_rates)) +
+  geom_bar(stat = "identity", fill = "blue") +
+  ggtitle("Error Rates by Model") +
+  xlab("Model") +
+  ylab("Error Rate (in %)") + 
+  theme(panel.background = element_rect(fill = "white"))
 
